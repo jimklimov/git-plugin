@@ -65,6 +65,7 @@ import org.eclipse.jgit.transport.URIish;
 import org.jenkinsci.plugins.gitclient.*;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.whitelists.Whitelisted;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.Exported;
 
@@ -78,6 +79,7 @@ import java.io.Serializable;
 import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.text.MessageFormat;
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -135,19 +137,20 @@ public class GitSCM extends GitSCMBackwardCompatibility {
      * All the branches that we wish to care about building.
      */
     private List<BranchSpec> branches;
-    private boolean doGenerateSubmoduleConfigurations;
+    private boolean doGenerateSubmoduleConfigurations = false;
 
     @CheckForNull
     public String gitTool;
     @CheckForNull
     private GitRepositoryBrowser browser;
-    private Collection<SubmoduleConfig> submoduleCfg;
+    private Collection<SubmoduleConfig> submoduleCfg = Collections.<SubmoduleConfig>emptyList();
     public static final String GIT_BRANCH = "GIT_BRANCH";
     public static final String GIT_LOCAL_BRANCH = "GIT_LOCAL_BRANCH";
     public static final String GIT_CHECKOUT_DIR = "GIT_CHECKOUT_DIR";
     public static final String GIT_COMMIT = "GIT_COMMIT";
     public static final String GIT_PREVIOUS_COMMIT = "GIT_PREVIOUS_COMMIT";
     public static final String GIT_PREVIOUS_SUCCESSFUL_COMMIT = "GIT_PREVIOUS_SUCCESSFUL_COMMIT";
+    public static final String GIT_URL = "GIT_URL";
 
     /**
      * All the configured extensions attached to this.
@@ -156,12 +159,14 @@ public class GitSCM extends GitSCMBackwardCompatibility {
     private DescribableList<GitSCMExtension,GitSCMExtensionDescriptor> extensions;
 
     @Whitelisted
+    @Deprecated
+    @SuppressFBWarnings(value="EI_EXPOSE_REP", justification="Unread deprecated collection")
     public Collection<SubmoduleConfig> getSubmoduleCfg() {
         return submoduleCfg;
     }
 
+    @DataBoundSetter
     public void setSubmoduleCfg(Collection<SubmoduleConfig> submoduleCfg) {
-        this.submoduleCfg = submoduleCfg;
     }
 
     public static List<UserRemoteConfig> createRepoList(String url, String credentialsId) {
@@ -180,17 +185,26 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         this(
                 createRepoList(repositoryUrl, null),
                 Collections.singletonList(new BranchSpec("")),
-                false, Collections.<SubmoduleConfig>emptyList(),
                 null, null, Collections.<GitSCMExtension>emptyList());
     }
 
-//    @Restricted(NoExternalUse.class) // because this keeps changing
-    @DataBoundConstructor
+    @Deprecated
     public GitSCM(
             List<UserRemoteConfig> userRemoteConfigs,
             List<BranchSpec> branches,
             Boolean doGenerateSubmoduleConfigurations,
             Collection<SubmoduleConfig> submoduleCfg,
+            @CheckForNull GitRepositoryBrowser browser,
+            @CheckForNull String gitTool,
+            List<GitSCMExtension> extensions) {
+        this(userRemoteConfigs, branches, browser, gitTool, extensions);
+    }
+
+    @DataBoundConstructor
+    @SuppressFBWarnings(value="EI_EXPOSE_REP2", justification="Modify access is assumed for userRemoteConfigs")
+    public GitSCM(
+            List<UserRemoteConfig> userRemoteConfigs,
+            List<BranchSpec> branches,
             @CheckForNull GitRepositoryBrowser browser,
             @CheckForNull String gitTool,
             List<GitSCMExtension> extensions) {
@@ -202,18 +216,6 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         updateFromUserData();
 
         this.browser = browser;
-
-        // emulate bindJSON behavior here
-        if (doGenerateSubmoduleConfigurations != null) {
-            this.doGenerateSubmoduleConfigurations = doGenerateSubmoduleConfigurations;
-        } else {
-            this.doGenerateSubmoduleConfigurations = false;
-        }
-
-        if (submoduleCfg == null) {
-            submoduleCfg = new ArrayList<>();
-        }
-        this.submoduleCfg = submoduleCfg;
 
         this.configVersion = 2L;
         this.gitTool = gitTool;
@@ -231,6 +233,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
      * @since 2.0
      */
     @Whitelisted
+    @SuppressFBWarnings(value="EI_EXPOSE_REP", justification="Low risk")
     public DescribableList<GitSCMExtension, GitSCMExtensionDescriptor> getExtensions() {
         return extensions;
     }
@@ -270,7 +273,6 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         if (source != null) {
             remoteRepositories = new ArrayList<>();
             branches = new ArrayList<>();
-            doGenerateSubmoduleConfigurations = false;
 
             List<RefSpec> rs = new ArrayList<>();
             rs.add(new RefSpec("+refs/heads/*:refs/remotes/origin/*"));
@@ -441,6 +443,11 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         return (gitDescriptor != null && gitDescriptor.isDisableGitToolChooser());
     }
 
+    public boolean isAddGitTagAction() {
+        DescriptorImpl gitDescriptor = getDescriptor();
+        return (gitDescriptor != null && gitDescriptor.isAddGitTagAction());
+    }
+
     @Whitelisted
     public BuildChooser getBuildChooser() {
         BuildChooser bc;
@@ -507,12 +514,12 @@ public class GitSCM extends GitSCMBackwardCompatibility {
     }
 
     /**
-     * Expand Parameters in the supplied remote repository with the parameter values provided in the given environment variables }
+     * Expand Parameters in the supplied remote repository with the parameter values provided in the given environment variables
      * @param env Environment variables with parameter values
      * @param remoteRepository Remote repository with parameters
      * @return remote repository with expanded parameters
      */
-    public RemoteConfig getParamExpandedRepo(EnvVars env, RemoteConfig remoteRepository){
+    public RemoteConfig getParamExpandedRepo(EnvVars env, RemoteConfig remoteRepository) {
         List<RefSpec> refSpecs = getRefSpecs(remoteRepository, env);
     	return newRemoteConfig(
                 getParameterString(remoteRepository.getName(), env),
@@ -541,6 +548,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
     }
 
     @Whitelisted
+    @SuppressFBWarnings(value="EI_EXPOSE_REP", justification="Low risk")
     public List<RemoteConfig> getRepositories() {
         // Handle null-value to ensure backwards-compatibility, ie project configuration missing the <repositories/> XML element
         if (remoteRepositories == null) {
@@ -785,7 +793,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
 
         GitClient git = createClient(listener, environment, project, node, workingDirectory);
 
-        if (git.hasGitRepo()) {
+        if (git.hasGitRepo(false)) {
             // Repo is there - do a fetch
             listener.getLogger().println("Fetching changes from the remote Git repositories");
 
@@ -1162,7 +1170,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         buildData.saveBuild(revToBuild);
 
         if (buildData.getBuildsByBranchName().size() >= 100) {
-            log.println("JENKINS-19022: warning: possible memory leak due to Git plugin usage; see: https://wiki.jenkins.io/display/JENKINS/Remove+Git+Plugin+BuildsByBranch+BuildData");
+            log.println("JENKINS-19022: warning: possible memory leak due to Git plugin usage; see: https://plugins.jenkins.io/git/#remove-git-plugin-buildsbybranch-builddata-script");
         }
         boolean checkForMultipleRevisions = true;
         BuildSingleRevisionOnly ext = extensions.get(BuildSingleRevisionOnly.class);
@@ -1201,7 +1209,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         List<RemoteConfig> repos = getParamExpandedRepos(build, listener);
         if (repos.isEmpty())    return; // defensive check even though this is an invalid configuration
 
-        if (git.hasGitRepo()) {
+        if (git.hasGitRepo(false)) {
             // It's an update
             if (repos.size() == 1)
                 log.println("Fetching changes from the remote Git repository");
@@ -1363,10 +1371,13 @@ public class GitSCM extends GitSCMBackwardCompatibility {
 
         // Don't add the tag and changelog if we've already processed this BuildData before.
         if (!buildDataAlreadyPresent) {
-            if (build.getActions(AbstractScmTagAction.class).isEmpty()) {
+            if (build.getActions(AbstractScmTagAction.class).isEmpty() && isAddGitTagAction()) {
                 // only add the tag action if we can be unique as AbstractScmTagAction has a fixed UrlName
                 // so only one of the actions is addressable by users
+                LOGGER.log(Level.FINE, "Adding GitTagAction to build " + build.number);
                 build.addAction(new GitTagAction(build, workspace, revToBuild.revision));
+            } else {
+                LOGGER.log(Level.FINE, "Not adding GitTagAction to build " + build.number);
             }
 
             if (changelogFile != null) {
@@ -1531,12 +1542,13 @@ public class GitSCM extends GitSCMBackwardCompatibility {
             repoCount++;
         }
 
-        if (userRemoteConfigs.size()==1){
-            env.put("GIT_URL", userRemoteConfigs.get(0).getUrl());
-        } else {
+        if (userRemoteConfigs.size()>0) {
+            env.put(GIT_URL, userRemoteConfigs.get(0).getUrl());
+        }
+        if (userRemoteConfigs.size()>1) {
             int count=1;
-            for(UserRemoteConfig config:userRemoteConfigs)   {
-                env.put("GIT_URL_"+count, config.getUrl());
+            for (UserRemoteConfig config:userRemoteConfigs) {
+                env.put(GIT_URL+"_"+count, config.getUrl());
                 count++;
             }
         }
@@ -1610,6 +1622,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         private boolean hideCredentials;
         private boolean allowSecondFetch;
         private boolean disableGitToolChooser;
+        private boolean addGitTagAction;
 
         public DescriptorImpl() {
             super(GitSCM.class, GitRepositoryBrowser.class);
@@ -1617,20 +1630,24 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         }
 
         @NonNull
-        // TODO: Add @Override when Jenkins core baseline is 2.222+
+        @Override
         public Permission getRequiredGlobalConfigPagePermission() {
-            return getJenkinsManageOrAdmin();
+            return Jenkins.MANAGE;
         }
 
-        // TODO: remove when Jenkins core baseline is 2.222+
+        /**
+         * Package protected method that was added for temporary use
+         * with the Manage permission until the plugin required a
+         * Jenkins core version that has Manage permission available.
+         * Unfortunately, because it is package protected, it is part
+         * of the class signature and needs to be retained for
+         * compatibility.  Method was removed in git plugin 4.8.0 and
+         * the removal seems to have exposed a bug elsewhere that is
+         * reported as https://issues.jenkins.io/browse/JENKINS-66296 ,
+         * Restoring this method seems to resolve that issue.
+         */
         Permission getJenkinsManageOrAdmin() {
-            Permission manage;
-            try { // Manage is available starting from Jenkins 2.222 (https://jenkins.io/changelog/#v2.222). See JEP-223 for more info
-                manage = (Permission) ReflectionUtils.getPublicProperty(Jenkins.get(), "MANAGE");
-            } catch (IllegalArgumentException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
-                manage = Jenkins.ADMINISTER;
-            }
-            return manage;
+            return Jenkins.MANAGE;
         }
 
         public boolean isShowEntireCommitSummaryInChanges() {
@@ -1748,6 +1765,10 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         public boolean isDisableGitToolChooser() { return disableGitToolChooser; }
 
         public void setDisableGitToolChooser(boolean disableGitToolChooser) { this.disableGitToolChooser = disableGitToolChooser; }
+
+        public boolean isAddGitTagAction() { return addGitTagAction; }
+
+        public void setAddGitTagAction(boolean addGitTagAction) { this.addGitTagAction = addGitTagAction; }
 
         /**
          * Old configuration of git executable - exposed so that we can
@@ -1879,12 +1900,14 @@ public class GitSCM extends GitSCMBackwardCompatibility {
     private static final long serialVersionUID = 1L;
 
     @Whitelisted
+    @Deprecated
     public boolean isDoGenerateSubmoduleConfigurations() {
-        return this.doGenerateSubmoduleConfigurations;
+        return false;
     }
 
     @Exported
     @Whitelisted
+    @SuppressFBWarnings(value="EI_EXPOSE_REP", justification="Low risk")
     public List<BranchSpec> getBranches() {
         return branches;
     }
@@ -1963,7 +1986,10 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         BuildData buildData = null;
         while (build != null) {
             List<BuildData> buildDataList = build.getActions(BuildData.class);
-            for (BuildData bd : buildDataList) {
+            // We need to get the latest recorded build data. It may happen
+            // that the build has more than one checkout of the same repo.
+            List<BuildData> buildDataListReverted = reversedView(buildDataList);
+            for (BuildData bd : buildDataListReverted) {
                 if (bd != null && isRelevantBuildData(bd)) {
                     buildData = bd;
                     break;
@@ -1976,6 +2002,26 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         }
 
         return buildData;
+    }
+
+    /**
+     * Gets a reversed view of an unmodifiable list without using increasing space or time.
+     * @param list The list to revert.
+     * @param <T> The type of the elements of the list.
+     * @return The list <i>reverted</i>.
+     */
+    private <T> List<T> reversedView(final List<T> list) {
+        return new AbstractList<T>() {
+            @Override
+            public T get(int index) {
+                return list.get(list.size() - 1 - index);
+            }
+
+            @Override
+            public int size() {
+                return list.size();
+            }
+        };
     }
 
     /**
@@ -2054,6 +2100,29 @@ public class GitSCM extends GitSCMBackwardCompatibility {
             e.printStackTrace(listener.error("Failed to determine if we want to exclude " + r.getSha1String()));
             return false;   // for historical reason this is not considered a fatal error.
         }
+    }
+
+    /**
+     * Data bound setter for doGenerateSubmoduleConfigurations that
+     * intentionally ignores the value passed by the caller.
+     * Submodule configuration generation was untested and unlikely to
+     * work prior to git plugin 4.6.0.  It was removed from git plugin
+     * 4.6.0 to improve the experience for Pipeline Syntax users.
+     *
+     * @param ignoredValue ignored because submodule configuration
+     * generation is no longer supported
+     */
+    @DataBoundSetter
+    public void setDoGenerateSubmoduleConfigurations(boolean ignoredValue) {
+    }
+
+    /**
+     * Returns false, the constant value of doGenerateSubmoduleConfigurations.
+     * @return false, the constant value of doGenerateSubmoduleConfigurations.
+     */
+    @Deprecated
+    public boolean getDoGenerateSubmoduleConfigurations() {
+        return doGenerateSubmoduleConfigurations;
     }
 
     @Initializer(after=PLUGINS_STARTED)

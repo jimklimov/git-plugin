@@ -11,7 +11,6 @@ import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.plugins.git.GitStatus;
 import hudson.plugins.git.GitTool;
-import hudson.remoting.Launcher;
 import hudson.scm.SCMDescriptor;
 import hudson.tools.CommandInstaller;
 import hudson.tools.InstallSourceProperty;
@@ -365,7 +364,7 @@ public class GitSCMSourceTest {
             return;
         }
         TaskListener log = StreamTaskListener.fromStdout();
-        HelloToolInstaller inst = new HelloToolInstaller("master", "echo Hello", "git");
+        HelloToolInstaller inst = new HelloToolInstaller(jenkins.jenkins.getSelfLabel().getName(), "echo Hello", "git");
         GitTool t = new GitTool("myGit", null, Collections.singletonList(
                 new InstallSourceProperty(Collections.singletonList(inst))));
         t.getDescriptor().setInstallations(t);
