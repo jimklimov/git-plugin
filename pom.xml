@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>4.26</version>
+    <version>4.31</version>
     <relativePath />
   </parent>
 
@@ -19,18 +19,18 @@
   <artifactId>git</artifactId>
   <version>${revision}${changelist}</version>
   <packaging>hpi</packaging>
-  <name>Jenkins Git plugin</name>
+  <name>Git plugin</name>
   <description>Integrates Jenkins with Git SCM</description>
   <url>https://github.com/jenkinsci/git-plugin/blob/master/README.adoc</url>
   <inceptionYear>2007</inceptionYear>
 
   <properties>
-    <revision>4.8.3</revision>
+    <revision>4.10.1</revision>
     <changelist>-SNAPSHOT</changelist>
     <gitHubRepo>jenkinsci/${project.artifactId}-plugin</gitHubRepo>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <argLine>-Dfile.encoding=${project.build.sourceEncoding}</argLine>
-    <jenkins.version>2.263.1</jenkins.version>
+    <jenkins.version>2.289.1</jenkins.version>
     <java.level>8</java.level>
     <no-test-jar>false</no-test-jar>
     <useBeta>true</useBeta>
@@ -58,9 +58,16 @@
           <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs</artifactId>
-            <version>4.4.1</version>
+            <version>4.5.0</version>
           </dependency>
         </dependencies>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <forkCount>0.8C</forkCount>
+          <reuseForks>true</reuseForks>
+        </configuration>
       </plugin>
     </plugins>
   </build>
@@ -99,7 +106,7 @@
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>git-client</artifactId>
-      <version>3.9.0</version>
+      <version>3.10.0</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
@@ -157,9 +164,14 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-inline</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>nl.jqno.equalsverifier</groupId>
       <artifactId>equalsverifier</artifactId>
-      <version>3.7.1</version>
+      <version>3.7.2</version>
       <scope>test</scope>
     </dependency>
     <!--Credential Binding Plugin-->
@@ -230,7 +242,7 @@
     <dependency>
       <groupId>com.github.spotbugs</groupId>
       <artifactId>spotbugs-annotations</artifactId>
-      <version>4.4.1</version>
+      <version>4.5.0</version>
       <exclusions> <!-- prevent inclusion in hpi as a transient dependency -->
         <exclusion>
           <groupId>com.google.code.findbugs</groupId>
@@ -261,8 +273,8 @@
     <dependencies>
       <dependency>
         <groupId>io.jenkins.tools.bom</groupId>
-        <artifactId>bom-2.263.x</artifactId>
-        <version>950.v396cb834de1e</version>
+        <artifactId>bom-2.289.x</artifactId>
+        <version>1008.vb9e22885c9cf</version>
         <scope>import</scope>
         <type>pom</type>
       </dependency>
