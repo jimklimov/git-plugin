@@ -140,6 +140,8 @@ public class GitSCMFileSystem extends SCMFileSystem {
      * but silently refuses to create or update the local ref, because doing
      * so would record a new shallow root (so it logs "shallow roots are not
      * allowed to be updated").
+     *
+     * @since 5.12.0
      */
     public static class GitRefNotFoundException extends IOException {
         private final String ref;
@@ -153,6 +155,7 @@ public class GitSCMFileSystem extends SCMFileSystem {
          * The ref that was expected but missing from the local cache.
          *
          * @return the ref name
+         * @since 5.12.0
          */
         public String getRef() {
             return ref;
@@ -412,6 +415,7 @@ public class GitSCMFileSystem extends SCMFileSystem {
                     git.using(tool.getGitExe());
                 }
                 GitClient client = git.getClient();
+                StandardCredentials matchedCredential = null;
                 String credentialsId = config.getCredentialsId();
                 if (credentialsId != null) {
                     var credential = CredentialsProvider.findCredentialByIdInItem(
@@ -420,7 +424,7 @@ public class GitSCMFileSystem extends SCMFileSystem {
                             owner,
                             ACL.SYSTEM2,
                             URIRequirementBuilder.fromUri(remote).build());
-                    StandardCredentials matchedCredential = credential != null && GitClient.CREDENTIALS_MATCHER.matches(credential)
+                    matchedCredential = credential != null && GitClient.CREDENTIALS_MATCHER.matches(credential)
                             ? credential
                             : null;
                     client.addDefaultCredentials(matchedCredential);
@@ -458,6 +462,8 @@ public class GitSCMFileSystem extends SCMFileSystem {
                         (AbstractGitSCMSource.SCMRevisionImpl) rev,
                         remoteURI,
                         refSpecs,
+                        cacheDir,
+                        matchedCredential,
                         listener);
             } catch (GitException x) {
                 throw new IOException(x);
@@ -512,6 +518,8 @@ public class GitSCMFileSystem extends SCMFileSystem {
                         (AbstractGitSCMSource.SCMRevisionImpl) rev,
                         remoteURI,
                         refSpecs,
+                        cacheDir,
+                        gitSCMSource.getCredentials(),
                         listener);
             } catch (GitException x) {
                 throw new IOException(x);
@@ -553,6 +561,8 @@ public class GitSCMFileSystem extends SCMFileSystem {
          * @param rev the revision, or {@code null} to resolve {@code ref} from the cache
          * @param remoteURI the URI passed to the preceding fetch, may be {@code null}
          * @param refSpecs the ref specs passed to the preceding fetch
+         * @param cacheDir the directory of the cache repository
+         * @param credentials the credentials used by the preceding fetch, if any
          * @param listener where to log the retry attempt
          * @return the resulting {@link GitSCMFileSystem}
          * @throws IOException on I/O error, including when the ref is still missing after the retry
@@ -565,6 +575,8 @@ public class GitSCMFileSystem extends SCMFileSystem {
                 @CheckForNull AbstractGitSCMSource.SCMRevisionImpl rev,
                 @CheckForNull URIish remoteURI,
                 List<RefSpec> refSpecs,
+                File cacheDir,
+                @CheckForNull StandardCredentials credentials,
                 TaskListener listener)
                 throws IOException, InterruptedException {
             try {
@@ -574,19 +586,14 @@ public class GitSCMFileSystem extends SCMFileSystem {
                         .println("Ref " + ref + " missing after fetch, retrying through JGit in case "
                                 + "the remote is a shallow clone or snapshot");
                 try {
-                    client.<Void>withRepository((Repository repository, VirtualChannel channel) -> {
-                        try {
-                            org.eclipse.jgit.api.Git.wrap(repository)
-                                    .fetch()
-                                    .setRemote(remoteURI != null ? remoteURI.toString() : remote)
-                                    .setRefSpecs(refSpecs)
-                                    .call();
-                        } catch (org.eclipse.jgit.api.errors.GitAPIException e) {
-                            throw new IOException(e);
-                        }
-                        return null;
-                    });
-                } catch (IOException fallbackFailure) {
+                    // A JGit-based client, so that credentials and transport settings are honoured as in the CLI fetch
+                    GitClient jgitClient = Git.with(listener, new EnvVars(EnvVars.masterEnvVars))
+                            .in(cacheDir)
+                            .using("jgit")
+                            .getClient();
+                    jgitClient.addDefaultCredentials(credentials);
+                    jgitClient.fetch_().prune(true).from(remoteURI, refSpecs).execute();
+                } catch (GitException fallbackFailure) {
                     refNotFoundException.addSuppressed(fallbackFailure);
                     throw refNotFoundException;
                 }

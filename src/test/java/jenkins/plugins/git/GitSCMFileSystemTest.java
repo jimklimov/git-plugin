@@ -518,30 +518,13 @@ class GitSCMFileSystemTest {
 
         sampleRepo.initBare();
 
-        // Here we parameterize branchNameOriginal more due to the fact
-        // that in e.g. automated Jenkins CI builds a PR source branch
-        // of git-plugin might be the only named ref checked out in the
-        // build workspace, and so the run-time would not necessarily
-        // know about a "master" to fetch. We can still name the branch
-        // made from a FETCH_HEAD in the sampleRepo replica whatever we
-        // like (e.g. branchName="master" as expected by test cases).
-        String branchNameOriginal = null;
-        try {
-            // Pick any, actually
-            for (Branch b : client.getBranches()) {
-                branchNameOriginal = b.getName();
-                break;
-            }
-        } catch (Exception ignored) {
-            // no-op, fall back to master below
-            ignored.printStackTrace();
-        }
-
-        if (branchNameOriginal == null) {
-            branchNameOriginal = "master";
-        }
-
-        sampleRepo.git("fetch", "--depth=1", gitDir.getAbsolutePath(), branchNameOriginal);
+        // Fetch the HEAD of the source repository, which works for both
+        // attached and detached checkouts (e.g. in automated CI builds
+        // a PR source branch might be the only named ref, or none at all).
+        // We can still name the branch made from a FETCH_HEAD in the
+        // sampleRepo replica whatever we like (e.g. branchName="master"
+        // as expected by test cases).
+        sampleRepo.git("fetch", "--depth=1", gitDir.getAbsolutePath(), "HEAD");
 
         // NOTE: Code below (after the initial "fetch") is repeatable
         // if multiple branches should be provided via shallow replicas.

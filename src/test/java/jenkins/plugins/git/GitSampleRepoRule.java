@@ -167,13 +167,11 @@ public final class GitSampleRepoRule extends AbstractSampleDVCSRepoRule {
     public void initBare() throws Exception {
         run(true, tmp.getRoot(), "git", "version");
         checkGlobalConfig();
-        git("init", "--bare", "-b", "master", "--template=", "."); // initialize without copying the installation defaults to ensure a vanilla repo that behaves the same everywhere
-        if (gitVersionAtLeast(2, 30)) {
-            // Force branch name to master even if system default is not master
-            // Fails on git 2.25 and earlier (Ubuntu 20.04, etc.)
-            // Works on git 2.30 and later
-            git("branch", "-m", "master");
-        }
+        git("init", "--bare", "--template=", "."); // initialize without copying the installation defaults to ensure a vanilla repo that behaves the same everywhere
+        // Force branch name to master even if system default is not master;
+        // unlike "init -b" (git 2.28+) or "branch -m" (fails on an empty repo
+        // before git 2.30) this works on every git version
+        git("symbolic-ref", "HEAD", "refs/heads/master");
         git("config", "user.name", "Git SampleRepoRule");
         git("config", "user.email", "gits@mplereporule");
         git("config", "init.defaultbranch", "master");
